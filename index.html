@@ -2,129 +2,305 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>チェキ撮影 - 特典会アプリ</title>
   <style>
-    body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; justify-content: space-between; }
-    .settings-bar { width: 100%; max-width: 480px; padding: 10px; background: #222; display: flex; gap: 10px; box-sizing: border-box; justify-content: center; }
-    .settings-bar select, .settings-bar input { padding: 6px; border-radius: 4px; border: none; font-size: 14px; }
-    .viewport { position: relative; width: 100%; max-width: 480px; flex-grow: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #121212; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; justify-content: space-between; overflow: hidden; padding: 5px 0; }
+    
+    .top-bar { width: 100%; max-width: 480px; padding: 5px 10px; background: #1e1e1e; display: flex; gap: 6px; align-items: center; justify-content: center; z-index: 10; font-size: 13px; }
+    select, button { padding: 6px 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; background: #333; color: #fff; font-size: 13px; }
+    
+    .viewport-container { width: 100%; max-width: 480px; flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 2px; }
+    .viewport-3-4 { position: relative; width: 100%; max-width: 320px; aspect-ratio: 3 / 4; background: #000; overflow: hidden; border-radius: 8px; border: 2px solid #333; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     video.mirror { transform: scaleX(-1); }
-    .controls { padding: 15px; width: 100%; max-width: 480px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; background: #222; }
-    .row { display: flex; justify-content: space-around; align-items: center; }
-    button { padding: 10px 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-    .shutter-btn { width: 70px; height: 70px; border-radius: 50%; background: #ff4081; border: 4px solid #fff; }
-    .timer-btn.active { background: #ffeb3b; color: #000; }
     #countdown { position: absolute; font-size: 80px; font-weight: bold; color: #ffeb3b; text-shadow: 0 0 10px rgba(0,0,0,0.8); display: none; }
+    
+    .controls { width: 100%; max-width: 480px; padding: 8px 10px; background: #1e1e1e; display: flex; flex-direction: column; gap: 6px; }
+    .row { display: flex; justify-content: space-around; align-items: center; width: 100%; }
+    .shutter-btn { width: 60px; height: 60px; border-radius: 50%; background: #ff4081; border: 3px solid #fff; }
+    .timer-btn.active { background: #ffeb3b; color: #000; }
+    .sub-control { font-size: 12px; display: flex; align-items: center; gap: 5px; }
+
+    /* モーダル */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 100; }
+    .modal-content { background: #222; padding: 15px; border-radius: 12px; width: 92%; max-width: 400px; max-height: 85vh; overflow-y: auto; font-size: 14px; }
+    .modal input[type="text"] { width: 100%; padding: 6px; margin: 4px 0 8px; border-radius: 4px; border: 1px solid #444; background: #333; color: #fff; }
+    .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0; }
+    .color-chip { width: 100%; aspect-ratio: 1; border-radius: 4px; border: 2px solid transparent; cursor: pointer; }
+    .color-chip.selected { border-color: #fff; transform: scale(1.1); }
+    .item-list { list-style: none; padding: 0; margin: 8px 0; max-height: 120px; overflow-y: auto; }
+    .item-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #333; }
+    .color-badge { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 6px; border: 1px solid #fff; vertical-align: middle; }
   </style>
 </head>
 <body>
 
-  <!-- グループ・メンバー設定バー -->
-  <div class="settings-bar">
-    <input type="text" id="group-name" placeholder="グループ名" value="推しグループ">
-    <input type="text" id="member-name" placeholder="メンバー名" value="メンバーA">
+  <div class="top-bar">
+    <select id="select-group"></select>
+    <select id="select-member"></select>
+    <button id="btn-open-settings">⚙️ 管理</button>
   </div>
 
-  <div class="viewport">
-    <video id="camera-stream" autoplay playsinline></video>
-    <div id="countdown">3</div>
+  <div class="viewport-container">
+    <div class="viewport-3-4">
+      <video id="camera-stream" autoplay playsinline></video>
+      <div id="countdown">3</div>
+    </div>
   </div>
 
   <div class="controls">
-    <div class="row" id="timer-group">
-      <button class="timer-btn active" data-time="0">OFF</button>
-      <button class="timer-btn" data-time="3">3秒</button>
-      <button class="timer-btn" data-time="5">5秒</button>
+    <!-- ズーム・ライト調整行 -->
+    <div class="row sub-control">
+      <span>🔍ズーム:</span>
+      <input type="range" id="zoom-range" min="1" max="3" step="0.1" value="1" style="width:110px;">
+      <button id="btn-torch" style="padding:4px 8px; background:#444;">💡ライト: OFF</button>
     </div>
     <div class="row">
-      <button id="switch-camera">カメラ切替</button>
+      <button class="timer-btn active" data-time="0" style="padding:4px 8px;">OFF</button>
+      <button class="timer-btn" data-time="3" style="padding:4px 8px;">3秒</button>
+      <button class="timer-btn" data-time="5" style="padding:4px 8px;">5秒</button>
+      <button id="switch-camera" style="padding:4px 8px;">カメラ切替</button>
+      <button id="toggle-mirror" style="padding:4px 8px;">反転</button>
+    </div>
+    <div class="row">
       <button class="shutter-btn" id="shutter"></button>
-      <button id="toggle-mirror">左右反転</button>
+    </div>
+  </div>
+
+  <!-- 設定管理モーダル -->
+  <div class="modal" id="settings-modal">
+    <div class="modal-content">
+      <h3 style="margin:0 0 10px 0;">グループ・メンバー管理</h3>
+      <label>グループ追加:</label>
+      <input type="text" id="new-group-name" placeholder="例: 推しグループ">
+      <button id="btn-add-group" style="width:100%; margin-bottom:10px;">グループ登録</button>
+
+      <label>メンバー追加:</label>
+      <input type="text" id="new-member-name" placeholder="例: メンバー名">
+      <label>メンカラ選択:</label>
+      <div class="color-grid" id="preset-colors"></div>
+      <button id="btn-add-member" style="width:100%; margin-top:5px; background:#ff4081;">メンバー登録</button>
+
+      <hr style="margin:10px 0; border-color:#444;">
+      <h4 style="margin:0 0 5px 0;">登録リスト（削除）</h4>
+      <ul class="item-list" id="registered-list"></ul>
+      <button id="btn-close-settings" style="width:100%; margin-top:8px; background:#555;">閉じる</button>
     </div>
   </div>
 
   <canvas id="hidden-canvas" style="display:none;"></canvas>
 
   <script type="module">
-    import { savePhoto } from './storage.js';
+    import { getStoredSettings, saveSettings, savePhoto } from './storage.js';
 
     const video = document.getElementById('camera-stream');
     const canvas = document.getElementById('hidden-canvas');
     const countdownEl = document.getElementById('countdown');
-    const groupInput = document.getElementById('group-name');
-    const memberInput = document.getElementById('member-name');
+    const selectGroup = document.getElementById('select-group');
+    const selectMember = document.getElementById('select-member');
     
-    let currentStream = null;
-    let useFrontCamera = true;
-    let isMirrored = true;
-    let timerVal = 0;
+    let currentStream = null, useFrontCamera = true, isMirrored = true, timerVal = 0;
+    let torchOn = false, trackCapabilities = null, selectedColorForAdd = '#ff0000';
+    let settings = getStoredSettings();
+
+    const PALETTE = [
+      { name: '赤', val: '#ff0000' },
+      { name: '青', val: '#0000ff' },
+      { name: '黄', val: '#FFFF00' },
+      { name: '紫', val: '#ff00ff' },
+      { name: 'ピンク', val: '#ff69b4' },
+      { name: '緑', val: '#00cc00' },
+      { name: 'パステルブルー', val: '#87cefa' },
+      { name: 'オレンジ', val: '#ffa500' },
+      { name: 'エメラルドグリーン', val: '#00a86b' },
+      { name: '白', val: '#ffffff' },
+      { name: '黒', val: '#000000' }
+    ];
+
+    if (settings.groups.length === 0) {
+      settings.groups = [{ name: '推しグループ', members: [{ name: '推しメン', color: '#ff0000' }] }];
+      saveSettings(settings);
+    }
+
+    function updateDropdowns() {
+      selectGroup.innerHTML = '';
+      settings.groups.forEach((g, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx; opt.textContent = g.name;
+        selectGroup.appendChild(opt);
+      });
+      updateMemberDropdown();
+    }
+
+    function updateMemberDropdown() {
+      selectMember.innerHTML = '';
+      const gIdx = selectGroup.value;
+      if (gIdx !== '' && settings.groups[gIdx]) {
+        settings.groups[gIdx].members.forEach((m, mIdx) => {
+          const opt = document.createElement('option');
+          opt.value = mIdx; opt.textContent = m.name;
+          selectMember.appendChild(opt);
+        });
+      }
+    }
+    selectGroup.addEventListener('change', updateMemberDropdown);
+
+    // モーダル色パレット描画
+    function renderColorPalette() {
+      const grid = document.getElementById('preset-colors');
+      grid.innerHTML = '';
+      PALETTE.forEach(p => {
+        const chip = document.createElement('div');
+        chip.className = `color-chip ${selectedColorForAdd === p.val ? 'selected' : ''}`;
+        chip.style.backgroundColor = p.val;
+        if(p.val === '#ffffff') chip.style.borderColor = '#666';
+        chip.onclick = () => {
+          selectedColorForAdd = p.val;
+          renderColorPalette();
+        };
+        grid.appendChild(chip);
+      });
+    }
+
+    const modal = document.getElementById('settings-modal');
+    document.getElementById('btn-open-settings').onclick = () => { renderRegisteredList(); renderColorPalette(); modal.style.display = 'flex'; };
+    document.getElementById('btn-close-settings').onclick = () => { modal.style.display = 'none'; updateDropdowns(); };
+
+    document.getElementById('btn-add-group').onclick = () => {
+      const name = document.getElementById('new-group-name').value.trim();
+      if (name) {
+        settings.groups.push({ name, members: [] });
+        saveSettings(settings);
+        document.getElementById('new-group-name').value = '';
+        renderRegisteredList();
+      }
+    };
+
+    document.getElementById('btn-add-member').onclick = () => {
+      const gIdx = selectGroup.value;
+      const mName = document.getElementById('new-member-name').value.trim();
+      if (gIdx !== '' && mName) {
+        settings.groups[gIdx].members.push({ name: mName, color: selectedColorForAdd });
+        saveSettings(settings);
+        document.getElementById('new-member-name').value = '';
+        renderRegisteredList();
+      }
+    };
+
+    function renderRegisteredList() {
+      const list = document.getElementById('registered-list');
+      list.innerHTML = '';
+      settings.groups.forEach((g, gIdx) => {
+        g.members.forEach((m, mIdx) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span><span class="color-badge" style="background:${m.color}"></span>${g.name} - ${m.name}</span>`;
+          const delBtn = document.createElement('button');
+          delBtn.textContent = '削除'; delBtn.style.padding = '2px 6px'; delBtn.style.background = '#e53935';
+          delBtn.onclick = () => {
+            settings.groups[gIdx].members.splice(mIdx, 1);
+            saveSettings(settings);
+            renderRegisteredList();
+          };
+          li.appendChild(delBtn);
+          list.appendChild(li);
+        });
+      });
+    }
 
     async function startCamera() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
+      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: useFrontCamera ? 'user' : 'environment' }
+        currentStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: useFrontCamera ? 'user' : 'environment' } 
         });
         video.srcObject = currentStream;
+        const track = currentStream.getVideoTracks()[0];
+        trackCapabilities = track.getCapabilities ? track.getCapabilities() : {};
+        document.getElementById('zoom-range').value = 1;
+        torchOn = false;
+        document.getElementById('btn-torch').textContent = '💡ライト: OFF';
       } catch (err) {
-        alert('カメラを起動できません: ' + err.message);
+        alert('カメラ起動エラー: ' + err.message);
       }
     }
 
+    // ズーム調整
+    document.getElementById('zoom-range').oninput = async (e) => {
+      const track = currentStream?.getVideoTracks()[0];
+      if (track && track.applyConstraints) {
+        try {
+          await track.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] });
+        } catch(err) {}
+      }
+    };
+
+    // ライト（Torch）切替
+    document.getElementById('btn-torch').onclick = async () => {
+      const track = currentStream?.getVideoTracks()[0];
+      if (track && trackCapabilities && trackCapabilities.torch) {
+        torchOn = !torchOn;
+        try {
+          await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+          document.getElementById('btn-torch').textContent = `💡ライト: ${torchOn ? 'ON' : 'OFF'}`;
+        } catch(e) {}
+      } else {
+        alert('このデバイス/カメラではライト機能を利用できません');
+      }
+    };
+
     document.querySelectorAll('.timer-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.onclick = (e) => {
         document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         timerVal = parseInt(e.target.dataset.time, 10);
-      });
+      };
     });
 
-    document.getElementById('switch-camera').addEventListener('click', () => {
-      useFrontCamera = !useFrontCamera;
-      startCamera();
-    });
+    document.getElementById('switch-camera').onclick = () => { useFrontCamera = !useFrontCamera; startCamera(); };
+    document.getElementById('toggle-mirror').onclick = () => { isMirrored = !isMirrored; video.classList.toggle('mirror', isMirrored); };
 
-    document.getElementById('toggle-mirror').addEventListener('click', () => {
-      isMirrored = !isMirrored;
-      video.classList.toggle('mirror', isMirrored);
-    });
-
-    document.getElementById('shutter').addEventListener('click', async () => {
+    document.getElementById('shutter').onclick = async () => {
       if (timerVal > 0) {
         countdownEl.style.display = 'block';
-        for (let i = timerVal; i > 0; i--) {
-          countdownEl.textContent = i;
-          await new Promise(r => setTimeout(r, 1000));
-        }
+        for (let i = timerVal; i > 0; i--) { countdownEl.textContent = i; await new Promise(r => setTimeout(r, 1000)); }
         countdownEl.style.display = 'none';
       }
       takeSnapshot();
-    });
+    };
 
     async function takeSnapshot() {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const gObj = settings.groups[selectGroup.value];
+      const mObj = gObj ? gObj.members[selectMember.value] : null;
+
+      const targetAspect = 3 / 4;
+      let vWidth = video.videoWidth, vHeight = video.videoHeight;
+      let sWidth = vWidth, sHeight = vWidth / targetAspect, sx = 0, sy = (vHeight - sHeight) / 2;
+
+      if (sHeight > vHeight) {
+        sHeight = vHeight; sWidth = vHeight * targetAspect; sx = (vWidth - sWidth) / 2; sy = 0;
+      }
+
+      canvas.width = 900; canvas.height = 1200;
       const ctx = canvas.getContext('2d');
 
       if (isMirrored && useFrontCamera) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
+        ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
       }
-      ctx.drawImage(video, 0, 0);
-
-      const groupName = groupInput.value || '未設定';
-      const memberName = memberInput.value || '未設定';
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob(async (blob) => {
-        const photoId = await savePhoto(blob, groupName, memberName);
-        window.location.href = `deco.html?id=${photoId}`;
+        const id = await savePhoto(blob, {
+          groupName: gObj ? gObj.name : '',
+          memberName: mObj ? mObj.name : '',
+          memberColor: mObj ? mObj.color : '#ffffff'
+        });
+        window.location.href = `deco.html?id=${id}`;
       }, 'image/jpeg', 0.95);
     }
 
+    updateDropdowns();
     startCamera();
   </script>
 </body>
