@@ -189,6 +189,11 @@
       try {
         currentStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: useFrontCamera ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+           async function startCamera() {
+      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: useFrontCamera ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         video.srcObject = currentStream;
         await video.play();
@@ -196,8 +201,9 @@
         alert('カメラの動作を許可してください: ' + err.message);
       }
     }
-
-    document.getElementById('zoom-range').oninput = async (e) => {
+ });
+        
+  document.getElementById('zoom-range').oninput = async (e) => {
       const track = currentStream?.getVideoTracks()[0];
       if (track && track.applyConstraints) {
         try { await track.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] }); } catch(err) {}
