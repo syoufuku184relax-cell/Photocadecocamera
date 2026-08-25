@@ -184,23 +184,22 @@
       });
     }
 
-    async function startCamera() {
+        async function startCamera() {
       if (currentStream) currentStream.getTracks().forEach(t => t.stop());
       try {
+        // 解像度の固定を外し、シンプルにカメラを要求するように変更
         currentStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: useFrontCamera ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-           async function startCamera() {
-      if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-      try {
-        currentStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: useFrontCamera ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+          video: { facingMode: useFrontCamera ? 'user' : 'environment' },
+          audio: false
         });
         video.srcObject = currentStream;
         await video.play();
       } catch (err) {
-        alert('カメラの動作を許可してください: ' + err.message);
+        console.error(err);
+        alert('カメラの起動に失敗しました: ' + err.name + ' - ' + err.message);
       }
     }
+
  });
         
   document.getElementById('zoom-range').oninput = async (e) => {
