@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>落書き - 特典会アプリ</title>
+  <style>
+    body { margin: 0; background: #222; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+    canvas { max-width: 100%; max-height: 70vh; border: 2px solid #444; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    .toolbar { margin-top: 15px; display: flex; gap: 10px; }
+    button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; background: #ff4081; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <canvas id="deco-canvas"></canvas>
+  <div class="toolbar">
+    <button id="btn-save">端末に保存</button>
+    <button id="btn-retake" style="background:#555;">撮り直す</button>
+  </div>
+
+  <script type="module">
+    import { getPhoto } from './storage.js';
+
+    const canvas = document.getElementById('deco-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // URLから写真IDを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const photoId = urlParams.get('id');
+
+    async function initDeco() {
+      if (!photoId) {
+        alert('写真が見つかりません');
+        window.location.href = 'camera.html';
+        return;
+      }
+
+      const blob = await getPhoto(photoId);
+      const img = new Image();
+      img.src = URL.createObjectURL(blob);
+      img.onload = () => {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+        setupDrawing();
+      };
+    }
+
+    // 簡単なお絵描き（ペン）機能のセットアップ
+    function setupDrawing() {
+      let isDrawing = false;
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 15;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+          x: (clientX - rect.left) * (canvas.width / rect.width),
+          y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+      };
+
+      const startDraw = (e) => { isDrawing = true; const pos = getPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); e.preventDefault(); };
+      const draw = (e) => { if (!isDrawing) return; const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); e.preventDefault(); };
+      const endDraw = () => { isDrawing = false; };
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', draw);
+      window.addEventListener('mouseup', endDraw);
+
+      canvas.addEventListener('touchstart', startDraw, { passive: false });
+      canvas.addEventListener('touchmove', draw, { passive: false });
+      window.addEventListener('touchend', endDraw);
+    }
+
+    // 保存ボタン
+    document.getElementById('btn-save').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `cheki_${Date.now()}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+    });
+
+    // 撮り直しボタン
+    document.getElementById('btn-retake').addEventListener('click', () => {
+      window.location.href = 'camera.html';
+    });
+
+    initDeco();
+  </script>
+</body>
+</html>
