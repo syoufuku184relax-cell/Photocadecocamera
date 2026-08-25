@@ -17,26 +17,31 @@ export function openDB() {
   });
 }
 
-// 写真を保存してIDを返す
-export async function savePhoto(blob) {
+// 写真とメタデータ（グループ名・メンバー名）を保存してIDを返す
+export async function savePhoto(blob, groupName, memberName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
-    const request = store.add({ blob, createdAt: new Date() });
-    request.onsuccess = () => resolve(request.result); // 採番されたID
+    const request = store.add({ 
+      blob, 
+      groupName: groupName || '未分類', 
+      memberName: memberName || '未選択', 
+      createdAt: new Date() 
+    });
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-// IDを指定して写真を取得
-export async function getPhoto(id) {
+// IDを指定して写真とメタデータを取得
+export async function getPhotoData(id) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.get(Number(id));
-    request.onsuccess = () => resolve(request.result ? request.result.blob : null);
+    request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
 }
