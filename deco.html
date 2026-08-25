@@ -6,13 +6,15 @@
   <title>落書き - 特典会アプリ</title>
   <style>
     body { margin: 0; background: #222; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-    canvas { max-width: 100%; max-height: 70vh; border: 2px solid #444; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    #info-text { font-size: 14px; margin-bottom: 5px; color: #ffeb3b; }
+    canvas { max-width: 100%; max-height: 65vh; border: 2px solid #444; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     .toolbar { margin-top: 15px; display: flex; gap: 10px; }
     button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; background: #ff4081; color: #fff; }
   </style>
 </head>
 <body>
 
+  <div id="info-text">読み込み中...</div>
   <canvas id="deco-canvas"></canvas>
   <div class="toolbar">
     <button id="btn-save">端末に保存</button>
@@ -20,25 +22,37 @@
   </div>
 
   <script type="module">
-    import { getPhoto } from './storage.js';
+    import { getPhotoData } from './storage.js';
 
     const canvas = document.getElementById('deco-canvas');
     const ctx = canvas.getContext('2d');
+    const infoText = document.getElementById('info-text');
     
-    // URLから写真IDを取得
     const urlParams = new URLSearchParams(window.location.search);
     const photoId = urlParams.get('id');
+
+    let currentGroup = '';
+    let currentMember = '';
 
     async function initDeco() {
       if (!photoId) {
         alert('写真が見つかりません');
-        window.location.href = 'camera.html';
+        window.location.href = 'index.html'; // または camera.html
         return;
       }
 
-      const blob = await getPhoto(photoId);
+      const data = await getPhotoData(photoId);
+      if (!data) {
+        alert('写真データが見つかりません');
+        return;
+      }
+
+      currentGroup = data.groupName;
+      currentMember = data.memberName;
+      infoText.textContent = `【 ${currentGroup} 】 メンバー：${currentMember}`;
+
       const img = new Image();
-      img.src = URL.createObjectURL(blob);
+      img.src = URL.createObjectURL(data.blob);
       img.onload = () => {
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
@@ -47,7 +61,6 @@
       };
     }
 
-    // 簡単なお絵描き（ペン）機能のセットアップ
     function setupDrawing() {
       let isDrawing = false;
       ctx.strokeStyle = '#ff0055';
@@ -78,17 +91,16 @@
       window.addEventListener('touchend', endDraw);
     }
 
-    // 保存ボタン
+    // 保存ボタン（ファイル名にグループ名とメンバーを含める）
     document.getElementById('btn-save').addEventListener('click', () => {
       const link = document.createElement('a');
-      link.download = `cheki_${Date.now()}.jpg`;
+      link.download = `${currentGroup}_${currentMember}_${Date.now()}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
     });
 
-    // 撮り直しボタン
     document.getElementById('btn-retake').addEventListener('click', () => {
-      window.location.href = 'camera.html';
+      window.location.href = 'index.html'; // または camera.html
     });
 
     initDeco();
