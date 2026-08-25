@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チェキ撮影 - 特典会アプリ</title>
+  <style>
+    body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; justify-content: space-between; }
+    .viewport { position: relative; width: 100%; max-width: 480px; flex-grow: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    video.mirror { transform: scaleX(-1); }
+    .controls { padding: 15px; width: 100%; max-width: 480px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; background: #222; }
+    .row { display: flex; justify-content: space-around; align-items: center; }
+    button { padding: 10px 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .shutter-btn { width: 70px; height: 70px; border-radius: 50%; background: #ff4081; border: 4px solid #fff; }
+    .timer-btn.active { background: #ffeb3b; color: #000; }
+    #countdown { position: absolute; font-size: 80px; font-weight: bold; color: #ffeb3b; text-shadow: 0 0 10px rgba(0,0,0,0.8); display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="viewport">
+    <video id="camera-stream" autoplay playsinline></video>
+    <div id="countdown">3</div>
+  </div>
+
+  <div class="controls">
+    <div class="row" id="timer-group">
+      <button class="timer-btn active" data-time="0">OFF</button>
+      <button class="timer-btn" data-time="3">3秒</button>
+      <button class="timer-btn" data-time="5">5秒</button>
+    </div>
+    <div class="row">
+      <button id="switch-camera">カメラ切替</button>
+      <button class="shutter-btn" id="shutter"></button>
+      <button id="toggle-mirror">左右反転</button>
+    </div>
+  </div>
+
+  <canvas id="hidden-canvas" style="display:none;"></canvas>
+
+  <script type="module">
+    import { savePhoto } from './storage.js';
+
+    const video = document.getElementById('camera-stream');
+    const canvas = document.getElementById('hidden-canvas');
+    const countdownEl = document.getElementById('countdown');
+    
+    let currentStream = null;
+    let useFrontCamera = true;
+    let isMirrored = true;
+    let timerVal = 0;
+
+    // カメラ起動
+    async function startCamera() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: useFrontCamera ? 'user' : 'environment' }
+        });
+        video.srcObject = currentStream;
+      } catch (err) {
+        alert('カメラを起動できません: ' + err.message);
+      }
+    }
+
+    // タイマーボタン設定
+    document.querySelectorAll('.timer-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        timerVal = parseInt(e.target.dataset.time, 10);
+      });
+    });
+
+    document.getElementById('switch-camera').addEventListener('click', () => {
+      useFrontCamera = !useFrontCamera;
+      startCamera();
+    });
+
+    document.getElementById('toggle-mirror').addEventListener('click', () => {
+      isMirrored = !isMirrored;
+      video.classList.toggle('mirror', isMirrored);
+    });
+
+    // シャッター・タイマー処理
+    document.getElementById('shutter').addEventListener('click', async () => {
+      if (timerVal > 0) {
+        countdownEl.style.display = 'block';
+        for (let i = timerVal; i > 0; i--) {
+          countdownEl.textContent = i;
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        countdownEl.style.display = 'none';
+      }
+      takeSnapshot();
+    });
+
+    // 撮影してIndexedDBに保存し、デコ画面へ遷移
+    async function takeSnapshot() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      if (isMirrored && useFrontCamera) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0);
+
+      canvas.toBlob(async (blob) => {
+        const photoId = await savePhoto(blob);
+        // 落書き画面へIDを渡して遷移
+        window.location.href = `deco.html?id=${photoId}`;
+      }, 'image/jpeg', 0.95);
+    }
+
+    startCamera();
+  </script>
+</body>
+</html>
