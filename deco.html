@@ -2,71 +2,138 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>落書き - 特典会アプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>チェキデコ - 特典会アプリ</title>
   <style>
-    body { margin: 0; background: #222; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-    #info-text { font-size: 14px; margin-bottom: 5px; color: #ffeb3b; }
-    canvas { max-width: 100%; max-height: 65vh; border: 2px solid #444; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    .toolbar { margin-top: 15px; display: flex; gap: 10px; }
-    button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; background: #ff4081; color: #fff; }
+    * { box-sizing: border-box; touch-action: none; }
+    body { margin: 0; background: #121212; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; overflow: hidden; padding: 4px 0; }
+    
+    /* 描画領域を極限まで拡大表示 */
+    .canvas-container { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 2px; overflow: hidden; }
+    canvas { max-width: 100%; max-height: 72vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); object-fit: contain; }
+
+    .toolbar { width: 100%; max-width: 480px; background: #1e1e1e; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+    .tool-row { display: flex; justify-content: space-around; align-items: center; gap: 4px; }
+    button { padding: 6px 10px; border: none; border-radius: 6px; background: #333; color: #fff; font-weight: bold; cursor: pointer; font-size: 12px; }
+    button.active { background: #ff4081; }
+    .stamp-btn { font-size: 16px; padding: 4px 8px; }
+
+    /* デコパレット */
+    .deco-palette { display: flex; gap: 4px; justify-content: center; align-items: center; }
+    .color-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+    .color-dot.active { border-color: #fff; transform: scale(1.15); }
   </style>
 </head>
 <body>
 
-  <div id="info-text">読み込み中...</div>
-  <canvas id="deco-canvas"></canvas>
+  <div class="canvas-container">
+    <canvas id="main-canvas"></canvas>
+  </div>
+
   <div class="toolbar">
-    <button id="btn-save">端末に保存</button>
-    <button id="btn-retake" style="background:#555;">撮り直す</button>
+    <div class="tool-row">
+      <button id="tool-pen" class="active">✏️ペン</button>
+      <button id="tool-eraser">🧹消しゴム</button>
+      <button id="stamp-heart" class="stamp-btn">❤️</button>
+      <button id="stamp-star" class="stamp-btn">⭐</button>
+      <button id="stamp-sparkle" class="stamp-btn">✨</button>
+      <button id="btn-clear" style="background:#d32f2f;">全消去</button>
+    </div>
+
+    <!-- 指定11色カラーパレット -->
+    <div class="tool-row deco-palette" id="palette-container"></div>
+
+    <div class="tool-row">
+      <label style="font-size:11px;">太さ:</label>
+      <input type="range" id="pen-size" min="3" max="35" value="10" style="width:140px;">
+      <button id="btn-retake" style="background:#555;">撮り直す</button>
+      <button id="btn-save" style="background:#2e7d32;">保存</button>
+    </div>
   </div>
 
   <script type="module">
     import { getPhotoData } from './storage.js';
 
-    const canvas = document.getElementById('deco-canvas');
+    const canvas = document.getElementById('main-canvas');
     const ctx = canvas.getContext('2d');
-    const infoText = document.getElementById('info-text');
     
     const urlParams = new URLSearchParams(window.location.search);
     const photoId = urlParams.get('id');
 
-    let currentGroup = '';
-    let currentMember = '';
+    let mode = 'pen';
+    let currentStamp = '❤️';
+    let penColor = '#ffffff';
+    let penSize = 10;
+    let photoMeta = null;
 
-    async function initDeco() {
-      if (!photoId) {
-        alert('写真が見つかりません');
-        window.location.href = 'index.html'; // または camera.html
-        return;
-      }
+    const PALETTE = [
+      { name: '赤', val: '#ff0000' },
+      { name: '青', val: '#0000ff' },
+      { name: '黄', val: '#FFFF00' },
+      { name: '紫', val: '#ff00ff' },
+      { name: 'ピンク', val: '#ff69b4' },
+      { name: '緑', val: '#00cc00' },
+      { name: 'パステルブルー', val: '#87cefa' },
+      { name: 'オレンジ', val: '#ffa500' },
+      { name: 'エメラルドグリーン', val: '#00a86b' },
+      { name: '白', val: '#ffffff' },
+      { name: '黒', val: '#000000' }
+    ];
 
-      const data = await getPhotoData(photoId);
-      if (!data) {
-        alert('写真データが見つかりません');
-        return;
-      }
+    function buildPaletteUI() {
+      const container = document.getElementById('palette-container');
+      container.innerHTML = '';
+      PALETTE.forEach(p => {
+        const dot = document.createElement('div');
+        dot.className = `color-dot ${penColor === p.val ? 'active' : ''}`;
+        dot.style.backgroundColor = p.val;
+        if(p.val === '#ffffff') dot.style.borderColor = '#666';
+        dot.onclick = () => {
+          penColor = p.val;
+          mode = 'pen';
+          document.getElementById('tool-pen').click();
+          buildPaletteUI();
+        };
+        container.appendChild(dot);
+      });
+    }
 
-      currentGroup = data.groupName;
-      currentMember = data.memberName;
-      infoText.textContent = `【 ${currentGroup} 】 メンバー：${currentMember}`;
+    async function initCanvas() {
+      if (!photoId) return window.location.href = 'index.html';
+      photoMeta = await getPhotoData(photoId);
+      if (!photoMeta) return;
 
       const img = new Image();
-      img.src = URL.createObjectURL(data.blob);
+      img.src = URL.createObjectURL(photoMeta.blob);
       img.onload = () => {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        ctx.drawImage(img, 0, 0);
+        const frameWidth = 900;
+        const frameHeight = 1200;
+        const borderTop = 40, borderSide = 40, borderBottom = 160;
+
+        canvas.width = frameWidth;
+        canvas.height = frameHeight;
+
+        // メンカラ背景
+        ctx.fillStyle = photoMeta.memberColor || '#ffffff';
+        ctx.fillRect(0, 0, frameWidth, frameHeight);
+
+        // チェキ白枠
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(15, 15, frameWidth - 30, frameHeight - 30);
+
+        // 写真合成
+        const photoW = frameWidth - (borderSide * 2);
+        const photoH = frameHeight - borderTop - borderBottom;
+        ctx.drawImage(img, borderSide, borderTop, photoW, photoH);
+
+        penColor = photoMeta.memberColor || '#ff0000';
+        buildPaletteUI();
         setupDrawing();
       };
     }
 
     function setupDrawing() {
       let isDrawing = false;
-      ctx.strokeStyle = '#ff0055';
-      ctx.lineWidth = 15;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
 
       const getPos = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -78,32 +145,79 @@
         };
       };
 
-      const startDraw = (e) => { isDrawing = true; const pos = getPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); e.preventDefault(); };
-      const draw = (e) => { if (!isDrawing) return; const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); e.preventDefault(); };
-      const endDraw = () => { isDrawing = false; };
+      const start = (e) => {
+        isDrawing = true;
+        const pos = getPos(e);
+        if (mode === 'stamp') {
+          ctx.font = `${penSize * 5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(currentStamp, pos.x, pos.y);
+          isDrawing = false;
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y);
+        }
+        e.preventDefault();
+      };
 
-      canvas.addEventListener('mousedown', startDraw);
-      canvas.addEventListener('mousemove', draw);
-      window.addEventListener('mouseup', endDraw);
+      const move = (e) => {
+        if (!isDrawing) return;
+        const pos = getPos(e);
+        ctx.lineWidth = penSize * 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-      canvas.addEventListener('touchstart', startDraw, { passive: false });
-      canvas.addEventListener('touchmove', draw, { passive: false });
-      window.addEventListener('touchend', endDraw);
+        if (mode === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = penColor;
+        }
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        e.preventDefault();
+      };
+
+      const end = () => { isDrawing = false; ctx.globalCompositeOperation = 'source-over'; };
+
+      canvas.addEventListener('mousedown', start);
+      canvas.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', end);
+      canvas.addEventListener('touchstart', start, { passive: false });
+      canvas.addEventListener('touchmove', move, { passive: false });
+      window.addEventListener('touchend', end);
     }
 
-    // 保存ボタン（ファイル名にグループ名とメンバーを含める）
-    document.getElementById('btn-save').addEventListener('click', () => {
+    document.getElementById('tool-pen').onclick = (e) => { mode = 'pen'; updateActive(e.target); };
+    document.getElementById('tool-eraser').onclick = (e) => { mode = 'eraser'; updateActive(e.target); };
+    
+    document.querySelectorAll('.stamp-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        mode = 'stamp';
+        currentStamp = e.target.textContent;
+        updateActive(e.target);
+      };
+    });
+
+    function updateActive(target) {
+      document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+      target.classList.add('active');
+    }
+
+    document.getElementById('pen-size').oninput = (e) => penSize = e.target.value;
+    document.getElementById('btn-clear').onclick = () => { if (confirm('すべて消去しますか？')) initCanvas(); };
+
+    document.getElementById('btn-save').onclick = () => {
       const link = document.createElement('a');
-      link.download = `${currentGroup}_${currentMember}_${Date.now()}.jpg`;
+      link.download = `${photoMeta.groupName}_${photoMeta.memberName}_${Date.now()}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
-    });
+    };
 
-    document.getElementById('btn-retake').addEventListener('click', () => {
-      window.location.href = 'index.html'; // または camera.html
-    });
+    document.getElementById('btn-retake').onclick = () => window.location.href = 'index.html';
 
-    initDeco();
+    initCanvas();
   </script>
 </body>
 </html>
