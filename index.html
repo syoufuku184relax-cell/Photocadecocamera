@@ -6,6 +6,8 @@
   <title>チェキ撮影 - 特典会アプリ</title>
   <style>
     body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; justify-content: space-between; }
+    .settings-bar { width: 100%; max-width: 480px; padding: 10px; background: #222; display: flex; gap: 10px; box-sizing: border-box; justify-content: center; }
+    .settings-bar select, .settings-bar input { padding: 6px; border-radius: 4px; border: none; font-size: 14px; }
     .viewport { position: relative; width: 100%; max-width: 480px; flex-grow: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; }
     video { width: 100%; height: 100%; object-fit: cover; }
     video.mirror { transform: scaleX(-1); }
@@ -18,6 +20,12 @@
   </style>
 </head>
 <body>
+
+  <!-- グループ・メンバー設定バー -->
+  <div class="settings-bar">
+    <input type="text" id="group-name" placeholder="グループ名" value="推しグループ">
+    <input type="text" id="member-name" placeholder="メンバー名" value="メンバーA">
+  </div>
 
   <div class="viewport">
     <video id="camera-stream" autoplay playsinline></video>
@@ -45,13 +53,14 @@
     const video = document.getElementById('camera-stream');
     const canvas = document.getElementById('hidden-canvas');
     const countdownEl = document.getElementById('countdown');
+    const groupInput = document.getElementById('group-name');
+    const memberInput = document.getElementById('member-name');
     
     let currentStream = null;
     let useFrontCamera = true;
     let isMirrored = true;
     let timerVal = 0;
 
-    // カメラ起動
     async function startCamera() {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
@@ -66,7 +75,6 @@
       }
     }
 
-    // タイマーボタン設定
     document.querySelectorAll('.timer-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
@@ -85,7 +93,6 @@
       video.classList.toggle('mirror', isMirrored);
     });
 
-    // シャッター・タイマー処理
     document.getElementById('shutter').addEventListener('click', async () => {
       if (timerVal > 0) {
         countdownEl.style.display = 'block';
@@ -98,7 +105,6 @@
       takeSnapshot();
     });
 
-    // 撮影してIndexedDBに保存し、デコ画面へ遷移
     async function takeSnapshot() {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -110,9 +116,11 @@
       }
       ctx.drawImage(video, 0, 0);
 
+      const groupName = groupInput.value || '未設定';
+      const memberName = memberInput.value || '未設定';
+
       canvas.toBlob(async (blob) => {
-        const photoId = await savePhoto(blob);
-        // 落書き画面へIDを渡して遷移
+        const photoId = await savePhoto(blob, groupName, memberName);
         window.location.href = `deco.html?id=${photoId}`;
       }, 'image/jpeg', 0.95);
     }
